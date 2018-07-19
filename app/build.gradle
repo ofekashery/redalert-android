@@ -1,15 +1,16 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 23
+    compileSdkVersion 27
     useLibrary 'org.apache.http.legacy'
 
     defaultConfig {
         applicationId "com.red.alert"
-        minSdkVersion 9
-        targetSdkVersion 20
+        minSdkVersion 14
+        targetSdkVersion 27
         versionCode 10094
         versionName "1.0.9.4"
+        multiDexEnabled true
     }
     buildTypes {
         release {
@@ -34,6 +35,8 @@ android {
 }
 
 dependencies {
+    implementation  'com.android.support:multidex:1.0.1'
+
     // Pushy SDK
     compile 'me.pushy:sdk:1.0.34'
 
@@ -45,11 +48,13 @@ dependencies {
     )
 
     // AppCompat v7 Dependency
-    compile 'com.android.support:appcompat-v7:23.4.0'
+    compile 'com.android.support:appcompat-v7:27.1.0'
+    implementation 'com.android.support:support-v4:27.1.0'
 
     // Google Play Services Dependencies
-    compile 'com.google.android.gms:play-services-gcm:7.8.0'
-    compile 'com.google.android.gms:play-services-location:7.8.0'
+    compile 'com.google.android.gms:play-services-gcm:15.0.1'
+    compile 'com.google.android.gms:play-services-location:15.0.1'
+    compile 'com.google.android.gms:play-services-maps:15.0.1'
 
     // All .jar files in ./libs
     compile fileTree(dir: 'libs', include: ['*.jar'])
