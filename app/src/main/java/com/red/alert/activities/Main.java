@@ -4,6 +4,7 @@ import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.location.Location;
 import android.os.Bundle;
 import android.support.v4.view.MenuItemCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -16,9 +17,13 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.red.alert.R;
 import com.red.alert.activities.settings.General;
 import com.red.alert.config.API;
@@ -35,9 +40,9 @@ import com.red.alert.logic.push.PushyRegistration;
 import com.red.alert.logic.services.ServiceManager;
 import com.red.alert.logic.settings.AppPreferences;
 import com.red.alert.model.Alert;
+import com.red.alert.model.metadata.City;
 import com.red.alert.model.res.VersionInfo;
 import com.red.alert.ui.adapters.AlertAdapter;
-import com.red.alert.ui.compatibility.ProgressDialogCompat;
 import com.red.alert.ui.dialogs.AlertDialogBuilder;
 import com.red.alert.ui.dialogs.custom.BluetoothDialogs;
 import com.red.alert.ui.dialogs.custom.LocationDialogs;
@@ -51,6 +56,7 @@ import com.red.alert.utils.feedback.Volume;
 import com.red.alert.utils.formatting.StringUtils;
 import com.red.alert.utils.integration.GooglePlayServices;
 import com.red.alert.utils.integration.WhatsApp;
+import com.red.alert.utils.localization.Localization;
 import com.red.alert.utils.metadata.AppVersion;
 import com.red.alert.utils.metadata.LocationData;
 import com.red.alert.utils.networking.HTTP;
@@ -136,10 +142,10 @@ public class Main extends AppCompatActivity {
         setContentView(R.layout.main);
 
         // Get views by IDs
-        mImSafe = (Button) findViewById(R.id.safe);
-        mAlertsList = (ListView) findViewById(R.id.alerts);
-        mLoading = (ProgressBar) findViewById(R.id.loading);
-        mNoAlerts = (LinearLayout) findViewById(R.id.noAlerts);
+        mImSafe = findViewById(R.id.safe);
+        mAlertsList = findViewById(R.id.alerts);
+        mLoading = findViewById(R.id.loading);
+        mNoAlerts = findViewById(R.id.noAlerts);
 
         // Initialize alert list
         mNewAlerts = new ArrayList<>();
@@ -153,10 +159,58 @@ public class Main extends AppCompatActivity {
 
         // On-click listeners
         initializeListeners();
+
+        // Get current location (last known)
+        FusedLocationProviderClient fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        fusedLocationClient.getLastLocation().addOnSuccessListener(this, new OnSuccessListener<Location>() {
+            @Override
+            public void onSuccess(Location location) {
+                // Got last known location. In some rare situations this can be null.
+                if (location != null) {
+                    List<City> citys = LocationData.getAllCities(Main.this);
+                    City nearbyCity = null;
+
+                    double lastDistance = 5; // Also the max distance
+
+                    // Loop over returned locations
+                    for (int i = 0; i < citys.size(); i++) {
+                        // Get distance to city in KM
+                        City city = citys.get(i);
+
+                        // Prepare new location
+                        Location cityLocation = new Location("");
+
+                        // Set lat & long
+                        cityLocation.setLatitude(city.latitude);
+                        cityLocation.setLongitude(city.longitude);
+
+                        double distance = cityLocation.distanceTo(location) / 1000;
+
+                        // Distance is less than last distance?
+                        if (distance < lastDistance) {
+                            // We are nearby!
+                            nearbyCity = city;
+                        }
+                    }
+                    if (nearbyCity != null) {
+                        boolean isEnglish = Localization.isEnglishLocale(Main.this);
+                        ((TextView) findViewById(R.id.nearby_city_zone)).setText(isEnglish && !nearbyCity.zoneEnglish.isEmpty() ? nearbyCity.zoneEnglish : nearbyCity.zone);
+                        ((TextView) findViewById(R.id.nearby_city_countdown)).setText(isEnglish && !nearbyCity.timeEnglish.isEmpty() ? nearbyCity.timeEnglish : nearbyCity.time);
+                        findViewById(R.id.nearby_city_progressbar).setVisibility(View.GONE);
+                        findViewById(R.id.nearby_city_container).setVisibility(View.VISIBLE);
+                    } else {
+                        // TODO: Show error msg
+                    }
+                } else {
+                    // TODO: Show error msg
+                }
+            }
+        });
     }
 
     @Override
     public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
         // Avoid call to super(). Bug on API Level > 11.
     }
 
@@ -588,8 +642,11 @@ public class Main extends AppCompatActivity {
 
         public RegisterPushAsync() {
             // Fix progress dialog appearance on old devices
-            mLoading = ProgressDialogCompat.getStyledProgressDialog(Main.this);
+            mLoading = new ProgressDialog(Main.this);;
+        }
 
+        @Override
+        protected void onPreExecute() {
             // Prevent cancel
             mLoading.setCancelable(false);
 
@@ -597,7 +654,10 @@ public class Main extends AppCompatActivity {
             mLoading.setMessage(getString(R.string.signing_up));
 
             // Show the progress dialog
-            mLoading.show();
+            if (getWindow().getDecorView().isShown()) {
+                mLoading.show();
+            }
+
         }
 
         @Override
